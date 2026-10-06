@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+dist/
+python/.venv/
+__pycache__/
+*.pyc
+*.xlsx
+*.csv
+*.spec
+.env
+.env.*

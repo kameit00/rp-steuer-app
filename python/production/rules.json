@@ -1,0 +1,52 @@
+{
+    "rules": [
+        {
+            "column": "Beschreibung",
+            "substring": "relax-pillow Kundennr.",
+            "info_column_value": "ZE Kunde"
+        },
+        {
+            "column": "Beschreibung",
+            "substring": "Rückerstattung",
+            "info_column_value": "ZE Kunde"
+        },
+        {
+            "column": "Beschreibung",
+            "substring": "Ergänzung Bestellung",
+            "info_column_value": "ZE Kunde"
+        },
+        {
+            "column": "Beschreibung",
+            "substring": "Auftragsbestätigung",
+            "info_column_value": "ZE Kunde"
+        },
+        {
+            "column": "Beschreibung",
+            "substring": "Gebühren",
+            "info_column_value": "Gebühr"
+        },
+        {
+            "column": "Name",
+            "substring": "Bankeinzug",
+            "info_column_value": "Gebucht über VB"
+        },
+        {
+            "column": "Name",
+            "substring": "Wouters Textielhandel B.V.",
+            "info_column_value": "Gebucht über VB"
+        },
+        {
+            "column": "Name",
+            "substring": "Bankauszahlung",
+            "info_column_value": "Übertrag VB"
+        },
+        {
+            "column": "Beschreibung",
+            "substring": "Rechnung",
+            "info_column_value": "ZE Kunde"
+        }
+    ],
+    "always_show_in_summary": [
+        "Durchlaufender Posten"
+    ]
+}

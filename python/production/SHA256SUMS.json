@@ -1,0 +1,7 @@
+{
+  "rp_steuer/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "rp_steuer/sevdesk_csv_to_excel.py": "954b2e5249826bcdb3828a789dab8b1ec614960b235fdd549841afa1f721f06d",
+  "rp_steuer/sevdesk_paypal.py": "530f9edbe8d2ad1458fb0a8842c1459b0fd15a584c035189f239ca381e253505",
+  "rules.json": "ab5952b8c5950c085fc2856c66cbd42e8a776c2fd3fc068c9815ca671ccf9dc9",
+  "production-uv.lock": "9b8cb7342fffad01a09fb3b309ef35e9bd034d1cf9f7ef4e391f0a8f216c2c16"
+}

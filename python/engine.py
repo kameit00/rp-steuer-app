@@ -6,6 +6,7 @@ import contextlib
 import importlib.metadata
 import io
 import json
+import platform
 import shutil
 import sys
 import tempfile
@@ -184,7 +185,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.diagnostics:
         emit({"type": "diagnostics", "app": "RP Steuer App", "version": APP_VERSION,
-              "python": sys.version, "dependencies": {
+              "architecture": platform.machine(), "python": sys.version, "dependencies": {
             name: importlib.metadata.version(name)
             for name in ("numpy", "pandas", "openpyxl", "xlsxwriter")
         }})

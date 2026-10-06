@@ -9,7 +9,7 @@ Native macOS-App (SwiftUI) für PayPal- und sevDesk-CSV-Dateien. Excel-Ausgaben 
 - Swift-Package, Target und ausführbare Datei: `RPSteuerApp`
 - Bundle-ID: `com.relax-pillow.rpsteuerapp`
 - Python-Projekt / Engine: `rp-steuer-app-engine`
-- Mindestversion: macOS 14; Builds sind architekturspezifisch (arm64 oder x86_64).
+- Mindestversion: macOS 14; **beide** architekturspezifischen Builds (arm64 und x86_64) bereitstellen. Kein Universal Binary und keine gemischte Python-/Swift-Architektur.
 
 ## Versionierung und Changelog (verbindlich)
 
@@ -29,8 +29,10 @@ Native macOS-App (SwiftUI) für PayPal- und sevDesk-CSV-Dateien. Excel-Ausgaben 
 - `python/engine.py`: Validierung, temporäre Kopien, Kollisionsschutz; keine Excel-Neuimplementierung.
 - `python/production/`: unveränderter Snapshot der Produktionskonverter, Regeln, originaler Lockfile und SHA-256-Manifest.
 - `python/tests/`: Regression, Schema-/Fehler-/Sicherheitsfälle, Workbook-Vergleich.
-- `build_app.sh`: Build, Tests, Signierung und paketierte Integrationstests.
-- `dist/`: generierte App, nicht in Git.
+- `build_app.sh`: native Builds, Tests, Architekturprüfung, Signierung, ZIP/Prüfsummen und paketierte Integrationstests.
+- `python/verify_app.py`: Metadaten-/Mach-O-/Runtime-Prüfung des Bundles und des entpackten ZIPs.
+- `.github/workflows/build-macos.yml`: native Buildmatrix `macos-15` (ARM) und `macos-15-intel` (Intel), startet bei `v*`-Tags oder manuell.
+- `dist/arm64/`, `dist/x86_64/`: generierte Apps; versionierte ZIPs und Prüfsummen in `dist/`, alles nicht in Git. `dist/RP Steuer App.app` ist der lokale Komfortlink.
 
 ## Datenintegrität
 
@@ -47,11 +49,12 @@ Native macOS-App (SwiftUI) für PayPal- und sevDesk-CSV-Dateien. Excel-Ausgaben 
 ```bash
 swift test
 (cd python && uv run --locked --group build python -m unittest discover -s tests -v)
-./build_app.sh
+./build_app.sh --arch arm64    # auf Apple Silicon
+./build_app.sh --arch x86_64   # auf Intel
 open "dist/RP Steuer App.app"
 ```
 
-Der vollständige Build testet auch die paketierte Python-Engine und die Swift-Prozesskommunikation. Für separate Integrationstests `RP_STEUER_APP_TEST_ENGINE` auf den absoluten Engine-Pfad setzen; `RP_STEUER_APP_ENGINE` ist der Entwickler-Override für `swift run`.
+Für eine Veröffentlichung **beide nativen Architektur-Jobs** erfolgreich ausführen; Intel nicht allein durch einen Swift-Crossbuild oder Prüfung unter ARM als validiert ausgeben. Buildumgebungen liegen architekturgetrennt in `.build/native/<Architektur>/`; `python/.venv` ist nur für Entwicklung. Rosetta nicht automatisch installieren oder Lizenzbedingungen ohne Zustimmung akzeptieren. Der vollständige Build testet auch die paketierte Python-Engine und die Swift-Prozesskommunikation und prüft die Signatur/Runtime nach ZIP-Entpacken. Für separate Integrationstests `RP_STEUER_APP_TEST_ENGINE` auf den absoluten Engine-Pfad setzen; `RP_STEUER_APP_ENGINE` ist der Entwickler-Override für `swift run`.
 
 Workbook-Vergleiche prüfen die XLSX-ZIP-Inhalte einschließlich Formeln, Styles und Blattstruktur. Nur Container-Metadaten und Erzeugungs-/Änderungstimestamps werden ignoriert. Vor Produktionsrollout echte Ausgaben unter den tatsächlich installierten Produktionsabhängigkeiten vergleichen.
 

@@ -2,6 +2,20 @@
 
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/). `VERSION` und `BUILD_NUMBER` definieren App-/Engine-Version und Buildnummer. Frühere lokale Prototyp-Versionen werden nicht als veröffentlichte Releases geführt.
 
+## [1.1.0] — 2026-10-06
+
+### Hinzugefügt
+- Zwei unabhängige native Builds: **Apple Silicon (arm64)** und **Intel (x86_64)**, jeweils mit passender Swift-App, Python-Runtime und nativen Bibliotheken.
+- GitHub-Actions-Buildmatrix auf nativen ARM- und Intel-macOS-Runnern, ausführbar für beide oder eine einzelne Architektur; Builds bei Versionstags.
+- Getrennte Ausgabeordner `dist/arm64/` und `dist/x86_64/` sowie versionierte ZIP-Downloads inklusive SHA-256-Prüfsummen.
+- Prüfung aller eingebetteten Mach-O-Dateien, Bundle-Metadaten, Architektur und Bibliotheksversionen; erneute Verifikation nach Entpacken des Download-ZIPs.
+
+### Geändert
+- `build_app.sh --arch arm64|x86_64` prüft die native Build-Architektur frühzeitig und verwendet getrennte Python-/Swift-/PyInstaller-Buildumgebungen.
+- `dist/RP Steuer App.app` ist ein Komfortlink auf den zuletzt lokal gebauten nativen Build.
+- Engine-Diagnose meldet zusätzlich die tatsächlich laufende Architektur.
+- Version **1.1.0**, Build **2**. macOS **14+** bleibt erforderlich; ZIPs sind ad-hoc signiert, nicht notarisiert. Es handelt sich um zwei Apps, nicht um ein Universal Binary.
+
 ## [1.0.0] — 2026-10-06
 
 ### Hinzugefügt

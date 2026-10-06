@@ -14,12 +14,32 @@ cd rp-steuer-app
 open "dist/RP Steuer App.app"
 ```
 
-Das Buildskript erstellt SwiftUI-Executable und private Python-Engine inklusive Runtime, nativer Bibliotheken und Excel-Abhängigkeiten. Es prüft Versionskonsistenz, signiert die App und führt Regressionstests gegen die paketierte Engine aus. `VERSION` und `BUILD_NUMBER` werden in die Bundle-Metadaten übernommen.
+Das Buildskript erstellt SwiftUI-Executable und private Python-Engine inklusive Runtime, nativer Bibliotheken und Excel-Abhängigkeiten. Es prüft Versionskonsistenz und CPU-Architektur aller eingebetteten Mach-O-Dateien, signiert die App und führt Regressionstests gegen die paketierte Engine aus. `VERSION` und `BUILD_NUMBER` werden in die Bundle-Metadaten übernommen.
 
 - **macOS 14+**, weil das paketierte NumPy-Wheel Sonoma voraussetzt.
-- **Architekturspezifisch**, kein Universal Binary: auf Apple Silicon arm64, auf einem Intel-Mac separat x86_64 bauen. Swift- und Python-Architektur müssen übereinstimmen.
+- **Zwei eigenständige Varianten**, kein Universal Binary: **arm64** für Apple Silicon und **x86_64** für Intel. Jede Variante enthält die passende Python-Runtime und native Bibliotheken; Swift- und Python-Architektur werden im Build geprüft.
 - Standardmäßig **ad-hoc signiert, nicht notarisiert**. Gatekeeper kann übertragene Builds blockieren.
 - Keine App Sandbox; Verarbeitung benötigt Zugriff auf ausgewählte Eingaben und Ausgabeordner.
+
+### Downloads für Apple Silicon und Intel
+
+Für jede Version gibt es zwei ZIPs:
+
+- `RP-Steuer-App-<Version>-arm64.zip` — Apple Silicon (M1, M2, M3 usw.).
+- `RP-Steuer-App-<Version>-x86_64.zip` — Intel-Macs.
+
+Beide enthalten `RP Steuer App.app`. Die passende Variante entpacken und nach Programme kopieren. Beide benötigen macOS 14+. Daneben liegt jeweils eine `.zip.sha256`-Datei zur Integritätsprüfung (`shasum -a 256 -c <Datei>.zip.sha256`). Nicht beide Varianten unter gleichem Namen in denselben Programme-Ordner kopieren.
+
+Native Builds:
+
+```bash
+./build_app.sh --arch arm64    # auf Apple Silicon
+./build_app.sh --arch x86_64   # auf Intel
+```
+
+Ergebnisse liegen getrennt in `dist/arm64/RP Steuer App.app` und `dist/x86_64/RP Steuer App.app`; ZIPs/Prüfsummen liegen in `dist/`. Der Komfortlink `dist/RP Steuer App.app` zeigt auf den zuletzt lokal gebauten nativen Build. Ein falsches `--arch` bricht vor der Installation von Abhängigkeiten ab, statt eine gemischte App zu erzeugen. Buildumgebungen und Caches liegen getrennt unter `.build/native/<Architektur>/`; die Entwicklungsumgebung `python/.venv` bleibt unberührt.
+
+**GitHub Actions → Build macOS apps → Run workflow** baut beide oder eine ausgewählte Variante auf passenden nativen macOS-Runnern (`macos-15` für ARM, `macos-15-intel` für Intel). Versionstags `v*` starten automatisch beide Builds. Die Jobs testen die paketierte Engine und Swift-Kommunikation nativ, prüfen alle Mach-O-Dateien und verifizieren die signierte App nach ZIP-Entpacken. ZIP und Prüfsumme werden als getrennte Architektur-Artefakte für 30 Tage bereitgestellt; veröffentlichte Release-Assets bleiben dauerhaft verfügbar. In privaten Repositories verbrauchen die Jobs GitHub-Actions-Kontingent.
 
 Developer-ID-Signierung ist optional:
 
@@ -117,7 +137,8 @@ rp-steuer-app/
 │   ├── compare_workbooks.py
 │   └── tests/
 ├── build_app.sh
-└── dist/RP Steuer App.app        # generiert, nicht in Git
+├── .github/workflows/build-macos.yml  # native ARM-/Intel-Builds
+└── dist/{arm64,x86_64}/RP Steuer App.app  # generiert, nicht in Git
 ```
 
 Swift startet `engine/rp-steuer-app-engine/rp-steuer-app-engine --request <private JSON-Datei>` ohne Shell. Logs/Ergebnisse werden als NDJSON übertragen; stdout/stderr werden unabhängig außerhalb des UI-Threads gelesen. Es gibt keinen System-Python-Fallback.

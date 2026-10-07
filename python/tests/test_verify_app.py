@@ -2,10 +2,12 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import struct
 import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
+import zlib
 
 from verify_app import DEPENDENCIES, MACHO_MAGICS, main, verify_app
 
@@ -25,11 +27,17 @@ class VerifyAppTests(unittest.TestCase):
             "CFBundleDisplayName": "RP Steuer App",
             "CFBundleName": "RP Steuer App",
             "CFBundleExecutable": "RPSteuerApp",
+            "CFBundleIconFile": "AppIcon.icns",
             "CFBundleShortVersionString": "1.1.0",
             "CFBundleVersion": "2",
             "LSMinimumSystemVersion": "14.0",
         }
         self.write_metadata()
+        self.icon = self.app / "Contents/Resources/AppIcon.icns"
+        self.icon_chunks = [(kind, self.png(size)) for kind, size in (
+            (b"ic08", 256), (b"ic09", 512), (b"ic10", 1024),
+        )]
+        self.write_icon()
         self.arch = "arm64"
         self.architectures = {}
         self.diagnostics = {
@@ -48,6 +56,24 @@ class VerifyAppTests(unittest.TestCase):
         path.write_bytes(magic + b"synthetic native binary")
         path.chmod(0o755)
         return path
+
+    @staticmethod
+    def png_chunk(kind, payload):
+        return (struct.pack(">I", len(payload)) + kind + payload
+                + struct.pack(">I", zlib.crc32(kind + payload)))
+
+    @classmethod
+    def png(cls, size):
+        # A complete, synthetic 8-bit grayscale PNG, with filter byte per row.
+        return (b"\x89PNG\r\n\x1a\n"
+                + cls.png_chunk(b"IHDR", struct.pack(">IIBBBBB", size, size, 8, 0, 0, 0, 0))
+                + cls.png_chunk(b"IDAT", zlib.compress(bytes((size + 1) * size)))
+                + cls.png_chunk(b"IEND", b""))
+
+    def write_icon(self, chunks=None):
+        body = b"".join(kind + struct.pack(">I", len(payload) + 8) + payload
+                        for kind, payload in (self.icon_chunks if chunks is None else chunks))
+        self.icon.write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
 
     def write_metadata(self):
         with (self.app / "Contents/Info.plist").open("wb") as stream:
@@ -109,6 +135,120 @@ class VerifyAppTests(unittest.TestCase):
                         self.verify()
                     self.metadata[key] = original
         self.assertFalse(self.run.called)
+
+    def test_committed_app_icon(self):
+        source = Path(__file__).resolve().parents[2] / "Resources/AppIcon.icns"
+        self.icon.write_bytes(source.read_bytes())
+        self.verify()
+
+    def test_missing_icon_resource(self):
+        self.icon.unlink()
+        with self.assertRaisesRegex(ValueError, "Cannot read icon.*AppIcon.icns"):
+            self.verify()
+        self.assertFalse(self.run.called)
+
+    def test_invalid_icon_container(self):
+        valid = self.icon.read_bytes()
+        cases = (
+            (b"", "header"),
+            (b"icns", "header"),
+            (b"nope" + valid[4:], "header"),
+            (valid[:-1], "container length"),
+            (valid + b"extra", "container length"),
+            (b"icns" + struct.pack(">I", 11) + b"ic0", "chunk header"),
+            (b"icns" + struct.pack(">I", 16) + b"ic08" + struct.pack(">I", 7), "chunk length"),
+            (b"icns" + struct.pack(">I", 16) + b"ic08" + struct.pack(">I", 100), "chunk length"),
+        )
+        for data, message in cases:
+            with self.subTest(data=data[:16], message=message):
+                self.icon.write_bytes(data)
+                with self.assertRaisesRegex(ValueError, message):
+                    self.verify()
+        self.assertFalse(self.run.called)
+
+    def test_required_icon_representations(self):
+        for kind, _ in self.icon_chunks:
+            with self.subTest(kind=kind):
+                self.write_icon([chunk for chunk in self.icon_chunks if chunk[0] != kind])
+                with self.assertRaisesRegex(ValueError, f"missing.*{kind.decode()}"):
+                    self.verify()
+
+    def test_icon_png_headers_and_dimensions(self):
+        for kind, size in ((b"icp4", 16), (b"icp5", 32), (b"icp6", 64),
+                           (b"ic07", 128), (b"ic08", 256), (b"ic09", 512), (b"ic10", 1024),
+                           (b"ic11", 32), (b"ic12", 64), (b"ic13", 256), (b"ic14", 512)):
+            png = self.png(size)
+            bad_headers = (
+                b"not PNG",
+                png[:32],
+                b"wrong!!!" + png[8:],
+                png[:8] + struct.pack(">I", 12) + png[12:],
+                png[:12] + b"IDAT" + png[16:],
+            )
+            others = [chunk for chunk in self.icon_chunks if chunk[0] != kind]
+            for payload in bad_headers:
+                with self.subTest(kind=kind, header=payload[:16]):
+                    self.write_icon(others + [(kind, payload)])
+                    with self.assertRaisesRegex(ValueError, f"PNG header.*{kind.decode()}"):
+                        self.verify()
+            for width, height in ((size + 1, size), (size, size + 1), (0, 0)):
+                with self.subTest(kind=kind, width=width, height=height):
+                    payload = png[:16] + struct.pack(">II", width, height) + png[24:]
+                    self.write_icon(others + [(kind, payload)])
+                    with self.assertRaisesRegex(ValueError, f"{kind.decode()}: expected {size}x{size}"):
+                        self.verify()
+
+    def test_icon_png_chunk_framing_and_crcs(self):
+        png = self.png(256)
+        header, idat, iend = png[:33], png[33:-12], png[-12:]
+        cases = [
+            ("header only", header, "missing final IEND"),
+            ("missing IDAT", header + iend, "missing nonempty IDAT"),
+            ("empty IDAT", header + self.png_chunk(b"IDAT", b"") + iend, "missing nonempty IDAT"),
+            ("corrupt IHDR CRC", header[:-1] + bytes([header[-1] ^ 1]) + idat + iend, "CRC"),
+            ("corrupt IDAT data", header + idat[:8] + bytes([idat[8] ^ 1]) + idat[9:] + iend, "CRC"),
+            ("corrupt IDAT CRC", header + idat[:-1] + bytes([idat[-1] ^ 1]) + iend, "CRC"),
+            ("oversized IDAT length", header + struct.pack(">I", 0x80000000) + idat[4:] + iend,
+             "chunk length"),
+            ("missing IEND", header + idat, "missing final IEND"),
+            ("corrupt IEND CRC", header + idat + iend[:-1] + bytes([iend[-1] ^ 1]), "CRC"),
+            ("nonempty IEND", header + idat + self.png_chunk(b"IEND", b"x"), "empty and final"),
+            ("bytes after IEND", png + b"extra", "empty and final"),
+            ("chunk after IEND", png + self.png_chunk(b"IDAT", b"x"), "empty and final"),
+            ("duplicate IHDR", header + header[8:] + idat + iend, "Duplicate PNG header"),
+        ]
+        # Cover incomplete length/type, payload, and CRC in each final chunk.
+        for length in (1, 4, 8, len(idat) - 5, len(idat) - 1):
+            cases.append((f"truncated IDAT at {length}", header + idat[:length], "[Tt]runcated"))
+        for length in (1, 4, 8, 11):
+            cases.append((f"truncated IEND at {length}", header + idat + iend[:length], "[Tt]runcated"))
+        for name, payload, message in cases:
+            with self.subTest(case=name):
+                self.write_icon([(b"ic08", payload)] + self.icon_chunks[1:])
+                with self.assertRaisesRegex(ValueError, f"{message}.*ic08"):
+                    self.verify()
+        self.assertFalse(self.run.called)
+
+    def test_icon_png_multiple_idat_chunks(self):
+        png = self.png(256)
+        data = png[41:-16]
+        payload = (png[:33] + self.png_chunk(b"IDAT", b"")
+                   + self.png_chunk(b"IDAT", data[:1])
+                   + self.png_chunk(b"IDAT", data[1:]) + png[-12:])
+        self.write_icon([(b"ic08", payload)] + self.icon_chunks[1:])
+        self.verify()
+
+    def test_optional_and_legacy_icon_representations(self):
+        optional = [(kind, self.png(size)) for kind, size in (
+            (b"icp4", 16), (b"icp5", 32), (b"icp6", 64), (b"ic07", 128),
+            (b"ic11", 32), (b"ic12", 64), (b"ic13", 256), (b"ic14", 512),
+        )]
+        self.write_icon(self.icon_chunks + optional)
+        self.verify()
+        # iconutil may use raw legacy representations rather than small PNGs.
+        self.write_icon(self.icon_chunks + [(b"ic04", b"legacy"), (b"ic05", b"legacy"),
+                                           (b"TOC ", b"unknown chunk")])
+        self.verify()
 
     def test_invalid_or_missing_plist(self):
         plist = self.app / "Contents/Info.plist"

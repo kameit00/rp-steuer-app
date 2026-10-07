@@ -2,6 +2,17 @@
 
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/). `VERSION` und `BUILD_NUMBER` definieren App-/Engine-Version und Buildnummer. Frühere lokale Prototyp-Versionen werden nicht als veröffentlichte Releases geführt.
 
+## [1.2.1] — 2026-10-07
+
+### Hinzugefügt
+- Eigenes macOS-App-Icon: helles Kissen, Tabellenblatt und goldenes Häkchen auf petrolfarbenem Hintergrund, passend zu relax-pillow und der Buchhaltungsverarbeitung.
+- ICNS mit Standard-/Retina-Auflösungen bis 1024 Pixel für Finder, Dock und App-Umschalter; Einbindung in beide Architektur-Builds über `CFBundleIconFile`.
+- PNG-Vorschau und reproduzierbare Vektorzeichnung in `scripts/generate_app_icon.swift`, ohne externe Grafiken, Schriften oder zusätzliche Abhängigkeiten.
+- Bundle-/ZIP-Prüfung verlangt das Icon und prüft ICNS-Struktur sowie PNG-Auflösungen; Regressionstests für fehlende und beschädigte Icons.
+
+### Status
+- Version **1.2.1**, Build **4**. Keine Änderung der Produktionskonverter, Regeln oder Datenverarbeitung. Lokale Standardbuilds bleiben ad-hoc signiert und nicht notarisiert; Release-Downloads werden erst nach erfolgreichen nativen ARM-/Intel-Builds und bestätigter Notarisierung veröffentlicht.
+
 ## [1.2.0] — 2026-10-07
 
 ### Hinzugefügt

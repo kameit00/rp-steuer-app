@@ -1,6 +1,6 @@
 [project]
 name = "rp-steuer-app-engine"
-version = "1.2.0"
+version = "1.2.1"
 description = "Bundled adapter for RP Steuer App using the unchanged production converters"
 requires-python = ">=3.13,<3.14"
 dependencies = [

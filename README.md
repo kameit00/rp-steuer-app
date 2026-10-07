@@ -4,6 +4,18 @@ Native macOS-App für PayPal- und sevDesk-CSV-Dateien. Die SwiftUI-Oberfläche v
 
 Version: siehe [`VERSION`](VERSION). Änderungen: [`CHANGELOG.md`](CHANGELOG.md). Projekt-/Agentenregeln: [`AGENTS.md`](AGENTS.md).
 
+## App-Icon
+
+<img src="Resources/AppIcon.png" alt="App-Icon: Kissen mit Tabellenblatt und goldenem Häkchen auf petrolfarbenem Hintergrund" width="160" />
+
+`Resources/AppIcon.icns` enthält die macOS-Standard-/Retina-Auflösungen bis 1024 Pixel. Der Build kopiert es ins App-Bundle und registriert es für Finder, Dock und App-Umschalter; die Bundle-Prüfung kontrolliert es auch nach ZIP-Entpacken. Die originale Vektorzeichnung lässt sich auf macOS ohne zusätzliche Abhängigkeiten regenerieren:
+
+```bash
+swift scripts/generate_app_icon.swift
+```
+
+Dabei werden `Resources/AppIcon.png` (Vorschau) und `Resources/AppIcon.icns` erneuert. Beide gehören ins Repository; normale App-Builds verwenden das fertige ICNS, ohne es neu zu erzeugen.
+
 ## Bauen und öffnen
 
 Voraussetzungen zum Bauen: macOS, Xcode Command Line Tools (`xcode-select --install`) und [uv](https://docs.astral.sh/uv/). Beim ersten Build wird eine Internetverbindung benötigt. Anwender benötigen **weder Python, uv, Homebrew noch Terminal**.
@@ -139,6 +151,7 @@ rp-steuer-app/
 ├── VERSION / BUILD_NUMBER       # verbindliche Release-Metadaten
 ├── CHANGELOG.md / AGENTS.md
 ├── Package.swift
+├── Resources/                   # AppIcon.icns und PNG-Vorschau
 ├── Sources/RPSteuerApp/         # SwiftUI, Einstellungen, Prozesskommunikation
 ├── Tests/RPSteuerAppTests/
 ├── python/
@@ -149,7 +162,7 @@ rp-steuer-app/
 │   ├── compare_workbooks.py
 │   └── tests/
 ├── build_app.sh / notarize_app.sh
-├── scripts/                     # sichere Secret-Einrichtung, temporärer CI-Schlüsselbund
+├── scripts/                     # Icon-Generator, Secret-Einrichtung, CI-Schlüsselbund
 ├── docs/SIGNING.md
 ├── .github/workflows/build-macos.yml  # native ARM-/Intel-Builds
 └── dist/{arm64,x86_64}/RP Steuer App.app  # generiert, nicht in Git

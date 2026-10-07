@@ -59,6 +59,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/engine"
 cp "$SWIFT_BIN" "$APP/Contents/MacOS/RPSteuerApp"
 cp -R "$STAGE/engine/rp-steuer-app-engine" "$APP/Contents/Resources/engine/"
 cp python/production/rules.json "$APP/Contents/Resources/rules.json"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 "$PYTHON" python/copy_snapshot.py python/production "$APP/Contents/Resources/production-snapshot"
 cp README.md CHANGELOG.md VERSION BUILD_NUMBER "$APP/Contents/Resources/"
 
@@ -71,6 +72,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleName</key><string>RP Steuer App</string>
     <key>CFBundleDisplayName</key><string>RP Steuer App</string>
     <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleIconFile</key><string>AppIcon.icns</string>
     <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
     <key>CFBundleVersion</key><string>$APP_BUILD</string>
     <key>CFBundleDevelopmentRegion</key><string>de</string>

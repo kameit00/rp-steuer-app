@@ -11,8 +11,20 @@ on:
         default: both
         type: choice
         options: [both, arm64, x86_64]
+      distribution:
+        description: Signing and distribution (tags always require notarization)
+        required: true
+        default: notarized
+        type: choice
+        options: [adhoc, developer-id, notarized]
+
+# Serialize distribution runs, but retain native matrix parallelism within a run.
+concurrency:
+  group: rp-steuer-app-distribution
+  cancel-in-progress: false
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -27,7 +39,10 @@ jobs:
           - arch: x86_64
             runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
+    env:
+      # Tags fail closed: there is no automatic fallback to ad-hoc signing.
+      DISTRIBUTION: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution || 'notarized' }}
     steps:
       - name: Checkout
         if: github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch
@@ -40,11 +55,37 @@ jobs:
         with:
           version: '0.9.2'
           enable-cache: false
+      - name: Refuse duplicate or pending notarization uploads
+        if: (github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch) && env.DISTRIBUTION == 'notarized'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci_notary_guard.py --arch "${{ matrix.arch }}"
+      - name: Set up temporary Developer ID keychain
+        if: (github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch) && env.DISTRIBUTION != 'adhoc'
+        env:
+          CI_SECRET_ARGV_APPROVED: ${{ vars.CI_SECRET_ARGV_APPROVED }}
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+          SIGNING_IDENTITY: ${{ secrets.SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: ./scripts/ci_signing.sh setup --arch "${{ matrix.arch }}" --distribution "$DISTRIBUTION"
       - name: Build and test native app and ZIP
         if: github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch
+        env:
+          SIGNING_IDENTITY: ${{ env.DISTRIBUTION != 'adhoc' && secrets.SIGNING_IDENTITY || '' }}
         run: ./build_app.sh --arch "${{ matrix.arch }}"
-      - name: Upload signed ZIP and checksum
-        if: github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch
+      - name: Notarize, staple and verify release ZIP
+        id: notarize
+        if: (github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch) && env.DISTRIBUTION == 'notarized'
+        # The helper waits at most 15 minutes; credentials stay in the temporary keychain.
+        run: ./notarize_app.sh --arch "${{ matrix.arch }}"
+      - name: Remove temporary signing credentials
+        if: always() && (github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch) && env.DISTRIBUTION != 'adhoc'
+        run: ./scripts/ci_signing.sh cleanup --arch "${{ matrix.arch }}"
+      - name: Upload distribution ZIP and checksum
+        if: success() && (github.event_name != 'workflow_dispatch' || inputs.architecture == 'both' || inputs.architecture == matrix.arch) && (env.DISTRIBUTION != 'notarized' || steps.notarize.outcome == 'success')
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: RP-Steuer-App-${{ matrix.arch }}
@@ -53,12 +94,23 @@ jobs:
             dist/RP-Steuer-App-*-${{ matrix.arch }}.zip.sha256
           if-no-files-found: error
           retention-days: 30
-      - name: Upload failure diagnostics
+      - name: Preserve pending notarization for same-ID resume (NOT a notarized download)
+        if: failure() && steps.notarize.outcome == 'failure'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pending-notarization-${{ env.APP_VERSION }}-${{ matrix.arch }}
+          path: |
+            dist/notarization/${{ matrix.arch }}/upload.zip
+            dist/notarization/${{ matrix.arch }}/*.json
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Upload failure diagnostics (no credentials)
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: build-diagnostics-${{ matrix.arch }}
           path: |
             .build/native/${{ matrix.arch }}/pyinstaller/rp-steuer-app-engine/warn-rp-steuer-app-engine.txt
+            dist/notarization/${{ matrix.arch }}/*.json
           if-no-files-found: ignore
           retention-days: 7

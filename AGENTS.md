@@ -31,7 +31,11 @@ Native macOS-App (SwiftUI) für PayPal- und sevDesk-CSV-Dateien. Excel-Ausgaben 
 - `python/tests/`: Regression, Schema-/Fehler-/Sicherheitsfälle, Workbook-Vergleich.
 - `build_app.sh`: native Builds, Tests, Architekturprüfung, Signierung, ZIP/Prüfsummen und paketierte Integrationstests.
 - `python/verify_app.py`: Metadaten-/Mach-O-/Runtime-Prüfung des Bundles und des entpackten ZIPs.
-- `.github/workflows/build-macos.yml`: native Buildmatrix `macos-15` (ARM) und `macos-15-intel` (Intel), startet bei `v*`-Tags oder manuell.
+- `.github/workflows/build-macos.yml`: native Buildmatrix `macos-15` (ARM) und `macos-15-intel` (Intel), startet bei `v*`-Tags oder manuell. Tags verlangen Notarisierung; manuell sind `adhoc`, `developer-id`, `notarized` möglich.
+- `scripts/setup_github_secrets.py`: lokale interaktive Secret-Einrichtung, verdeckte Eingabe, gh-Übertragung über stdin. Keine automatischen Schlüssel-/Passwortexports.
+- `scripts/ci_signing.sh`: ausschließlich CI; temporärer, begrenzt freigeschalteter Schlüsselbund mit verpflichtendem Cleanup.
+- `notarize_app.sh`: Submission-Ledger und exakte Upload-Kopie, Wiederaufnahme derselben ID, Stapling/Gatekeeper-Prüfung und endgültige ZIP erst nach Freigabe.
+- `docs/SIGNING.md`: vollständige Sicherheits-/Setup-/Wiederaufnahmeanleitung.
 - `dist/arm64/`, `dist/x86_64/`: generierte Apps; versionierte ZIPs und Prüfsummen in `dist/`, alles nicht in Git. `dist/RP Steuer App.app` ist der lokale Komfortlink.
 
 ## Datenintegrität
@@ -58,4 +62,6 @@ Für eine Veröffentlichung **beide nativen Architektur-Jobs** erfolgreich ausf�
 
 Workbook-Vergleiche prüfen die XLSX-ZIP-Inhalte einschließlich Formeln, Styles und Blattstruktur. Nur Container-Metadaten und Erzeugungs-/Änderungstimestamps werden ignoriert. Vor Produktionsrollout echte Ausgaben unter den tatsächlich installierten Produktionsabhängigkeiten vergleichen.
 
-Standardbuilds sind ad-hoc signiert, nicht notarisiert. Developer-ID-Signierung/Notarisierung und das Zielgerät separat prüfen. Git-Commits enthalten Quellcode, Dokumentation und Lockfiles, aber keine `.build/`, `.venv/` oder `dist/`-Artefakte.
+Lokale Standardbuilds sind ad-hoc signiert, nicht notarisiert. Developer-ID-Signierung und Notarisierung sind getrennte Zustände: nur bestätigtes `Accepted`, Stapling und Gatekeeper-Prüfung berechtigen zur Bezeichnung „notarisiert“. Timeouts sind keine Ablehnung/Freigabe und dürfen keine blinden Wiederholungs-Uploads auslösen; eingefrorene Payloads, ID und JSON-Ledger erhalten.
+
+Für Secret-Einrichtung und Änderungen an Signierung/CI **docs/SIGNING.md vollständig lesen**. Privaten Schlüssel nur nach expliziter Benutzeraktion exportieren, niemals Login-Keychain global freischalten, keine Passwörter/Keys in Chat, lokalen argv/Logs/Commits. Ausschließlich im isolierten, temporären CI-Runner ist nach expliziter Benutzerbestätigung und Repository-Variable `CI_SECRET_ARGV_APPROVED=true` die dokumentierte Apple-CLI-Argument-Ausnahme zulässig; niemals stillschweigend aktivieren. CI importiert nur in temporäre Schlüsselbünde und räumt auch bei Fehlern auf. Secrets ausschließlich in vertrauenswürdigen Jobs verwenden, nicht bei Fremd-PRs. Fehlende Secrets/Freigabe im Release-Modus führen zum Abbruch, niemals zu ad-hoc Fallback. Notarisierte CI-Reruns und bekannte Pending-Artefakte derselben Version sperren; Workflows serialisieren und offene IDs manuell wiederaufnehmen statt blind erneut einzureichen. Einen konfigurierten oder simuliert getesteten Workflow nicht als erfolgreich notarisiertes Release darstellen. Developer-ID-Signierung/Notarisierung und das Zielgerät separat prüfen. Git-Commits enthalten Quellcode, Dokumentation und Lockfiles, aber keine `.build/`, `.venv/` oder `dist/`-Artefakte.

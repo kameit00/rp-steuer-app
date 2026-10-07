@@ -10,3 +10,10 @@ __pycache__/
 *.spec
 .env
 .env.*
+*.p12
+*.pfx
+*.p8
+*.pem
+*.key
+*.keychain
+*.keychain-db

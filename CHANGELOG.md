@@ -2,6 +2,20 @@
 
 Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/). `VERSION` und `BUILD_NUMBER` definieren App-/Engine-Version und Buildnummer. Frühere lokale Prototyp-Versionen werden nicht als veröffentlichte Releases geführt.
 
+## [1.2.0] — 2026-10-07
+
+### Hinzugefügt
+- Interaktive lokale Einrichtung von sechs GitHub-Actions-Secrets: verschlüsselte P12-Identität, Export-Passwort, Signieridentität und Apple-Notarisierungszugang. Verdeckte Passworteingabe und Übertragung ausschließlich über stdin; kein automatischer Schlüssel-/Passwortexport aus dem Schlüsselbund.
+- CI-Modi `adhoc`, `developer-id` und `notarized` für beide Architekturen; Versionstags verlangen Notarisierung und fallen bei fehlenden Secrets nicht auf ad-hoc zurück.
+- Temporärer CI-Schlüsselbund mit begrenztem Codesign-Zugriff, Credential-Validierung und Cleanup auch bei Fehlern; keine Änderung des lokalen Login-Schlüsselbunds. Eine eng begrenzte Apple-CLI-Argument-Ausnahme in isolierten CI-Runnern erfordert explizite Benutzerbestätigung und `CI_SECRET_ARGV_APPROVED=true`.
+- Notarisierungsskript mit dauerhaftem Submission-Ledger, Wiederaufnahme derselben ID, unveränderter Upload-Kopie, Stapling, Gatekeeper-/Signaturprüfung und neuer ZIP-Prüfsumme erst nach `Accepted`.
+- Gesonderte versionierte Wiederaufnahme-Artefakte bei noch laufender/fehlgeschlagener Notarisierung; solche ZIPs werden nicht als notarisiert veröffentlicht. Serialisierte Workflows sowie Guards für CI-Reruns und bekannte gleichversionige Pending-Artefakte verhindern blinde erneute Einreichungen.
+- Tests für Secret-Übertragung ohne Ausgabe/argv-Leaks, Validierung, sichere Eingabe und Notarisierungs-/Fehler-/Wiederaufnahmelogik.
+
+### Sicherheit und Status
+- Private Schlüssel, P12-Dateien und Notarisierungsdaten bleiben aus Git ausgeschlossen. Repository-Secrets müssen vom Benutzer im lokalen Terminal vervollständigt werden; der private Schlüssel wird nicht ohne Zustimmung exportiert.
+- Version **1.2.0**, Build **3**. Implementierte Notarisierungsunterstützung bedeutet noch keine Apple-Freigabe: bestehende manuelle Einreichungen von **1.1.0** sind separat und dürfen erst nach bestätigter Freigabe als notarisiert bezeichnet werden.
+
 ## [1.1.0] — 2026-10-06
 
 ### Hinzugefügt

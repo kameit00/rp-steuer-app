@@ -18,7 +18,7 @@ Das Buildskript erstellt SwiftUI-Executable und private Python-Engine inklusive 
 
 - **macOS 14+**, weil das paketierte NumPy-Wheel Sonoma voraussetzt.
 - **Zwei eigenständige Varianten**, kein Universal Binary: **arm64** für Apple Silicon und **x86_64** für Intel. Jede Variante enthält die passende Python-Runtime und native Bibliotheken; Swift- und Python-Architektur werden im Build geprüft.
-- Standardmäßig **ad-hoc signiert, nicht notarisiert**. Gatekeeper kann übertragene Builds blockieren.
+- Lokale Standardbuilds sind **ad-hoc signiert, nicht notarisiert**. CI bietet `adhoc`, `developer-id` und `notarized`; Versionstags verlangen den notarisierten Modus mit vollständig konfigurierten Secrets. Gatekeeper kann nicht notarisierte übertragene Builds blockieren.
 - Keine App Sandbox; Verarbeitung benötigt Zugriff auf ausgewählte Eingaben und Ausgabeordner.
 
 ### Downloads für Apple Silicon und Intel
@@ -39,16 +39,28 @@ Native Builds:
 
 Ergebnisse liegen getrennt in `dist/arm64/RP Steuer App.app` und `dist/x86_64/RP Steuer App.app`; ZIPs/Prüfsummen liegen in `dist/`. Der Komfortlink `dist/RP Steuer App.app` zeigt auf den zuletzt lokal gebauten nativen Build. Ein falsches `--arch` bricht vor der Installation von Abhängigkeiten ab, statt eine gemischte App zu erzeugen. Buildumgebungen und Caches liegen getrennt unter `.build/native/<Architektur>/`; die Entwicklungsumgebung `python/.venv` bleibt unberührt.
 
-**GitHub Actions → Build macOS apps → Run workflow** baut beide oder eine ausgewählte Variante auf passenden nativen macOS-Runnern (`macos-15` für ARM, `macos-15-intel` für Intel). Versionstags `v*` starten automatisch beide Builds. Die Jobs testen die paketierte Engine und Swift-Kommunikation nativ, prüfen alle Mach-O-Dateien und verifizieren die signierte App nach ZIP-Entpacken. ZIP und Prüfsumme werden als getrennte Architektur-Artefakte für 30 Tage bereitgestellt; veröffentlichte Release-Assets bleiben dauerhaft verfügbar. In privaten Repositories verbrauchen die Jobs GitHub-Actions-Kontingent.
+**GitHub Actions → Build macOS apps → Run workflow** baut beide oder eine ausgewählte Variante auf passenden nativen macOS-Runnern (`macos-15` für ARM, `macos-15-intel` für Intel). Zusätzlich `distribution` wählen: `adhoc`, `developer-id` oder `notarized`. Versionstags `v*` starten automatisch beide Builds im notarisierten Modus und scheitern bei fehlenden Secrets, statt still ad-hoc zu signieren. Die Jobs testen die paketierte Engine und Swift-Kommunikation nativ, prüfen alle Mach-O-Dateien und verifizieren die signierte App nach ZIP-Entpacken. Erfolgreiche ZIPs/Prüfsummen liegen für 30 Tage als Artefakte bereit; pending/fehlgeschlagene Notarisierungen werden separat und ausdrücklich nicht als freigegebene Distribution bereitgestellt. Veröffentlichte Release-Assets bleiben dauerhaft verfügbar. In privaten Repositories verbrauchen die Jobs GitHub-Actions-Kontingent.
 
-Developer-ID-Signierung ist optional:
+### Developer-ID und GitHub Secrets
+
+Die vollständige Anleitung steht in **[docs/SIGNING.md](docs/SIGNING.md)**. Nach manuellem Export der ausgewählten Developer-ID-Identität als passwortgeschützte P12 außerhalb des Projekts im eigenen Terminal starten:
+
+```bash
+python3 scripts/setup_github_secrets.py
+```
+
+Die Hilfe überträgt sechs Secrets verschlüsselt mit GitHub CLI, fragt Passwörter verdeckt ab und exportiert keine privaten Schlüssel automatisch. Erst nach vollständiger Einrichtung beide CI-Architekturen im Modus `developer-id` testen, anschließend `notarized` verwenden. Das Einrichten allein startet keine Apple-Einreichung.
+
+Lokal:
 
 ```bash
 SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" ./build_app.sh
-# Danach die App als ZIP mit xcrun notarytool notarieren und die .app stapeln.
+NOTARY_KEYCHAIN_PROFILE=rp-steuer-app ./notarize_app.sh --arch arm64
+# Nach Timeout denselben Auftrag wiederaufnehmen, nicht neu signieren/einreichen:
+NOTARY_KEYCHAIN_PROFILE=rp-steuer-app ./notarize_app.sh --arch arm64 --resume
 ```
 
-Developer-ID-Signierung und Notarisierung sind nicht durch den lokalen ad-hoc Build zertifiziert. Vor Rollout die Zielarchitektur und älteste unterstützte macOS-Version prüfen.
+Nur bestätigtes `Accepted` mit erfolgreichem Stapling und Gatekeeper-Prüfung ergibt einen notarisierten Download. Unterstützung im Workflow ist kein Nachweis einer Apple-Freigabe. Vor Rollout beide realen Zielgeräte und die älteste unterstützte macOS-Version prüfen.
 
 ## Verwendung
 
@@ -136,7 +148,9 @@ rp-steuer-app/
 │   ├── pyproject.toml / uv.lock  # private gesperrte Abhängigkeiten
 │   ├── compare_workbooks.py
 │   └── tests/
-├── build_app.sh
+├── build_app.sh / notarize_app.sh
+├── scripts/                     # sichere Secret-Einrichtung, temporärer CI-Schlüsselbund
+├── docs/SIGNING.md
 ├── .github/workflows/build-macos.yml  # native ARM-/Intel-Builds
 └── dist/{arm64,x86_64}/RP Steuer App.app  # generiert, nicht in Git
 ```

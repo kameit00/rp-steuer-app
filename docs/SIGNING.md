@@ -35,6 +35,8 @@ Die Hilfe fragt nach P12-Pfad, verdecktem Export-Passwort, Signieridentität, Te
 
 Pfad als normalen Text eingeben, ohne zusätzliche Anführungszeichen oder Shell-Escapes. Die Hilfe verweigert nicht-interaktive Eingaben, Dateien im Projektordner, übergroße P12-Dateien und öffentliche Zielrepositories. Werte werden nicht in Prozessargumenten, Shell-History oder Logausgaben übergeben: `gh secret set` erhält sie über stdin und verschlüsselt sie lokal mit dem Repository-Schlüssel.
 
+**P12-Prüfung/OpenSSL:** Auf macOS nutzt die Hilfe gezielt `/usr/bin/openssl` (Apple/LibreSSL). Homebrew-OpenSSL 3 deaktiviert ältere RC2/3DES-Verfahren aus Schlüsselbund-Exporten standardmäßig und kann daher auch bei richtigem Passwort scheitern. Wenn kein Apple-Binary verfügbar ist, wird ausschließlich bei einem nicht unterstützten Verfahren `-legacy` für diesen einen Leseversuch verwendet. Die MAC-/Passwortprüfung wird niemals ausgeschaltet; es werden keine entschlüsselten Schlüssel ausgegeben oder Dateien umgewandelt. Eine fehlgeschlagene MAC-Prüfung kann ein falsches Passwort oder eine beschädigte P12 bedeuten.
+
 Sechs Repository-Secrets für **GitHub Actions**:
 
 | Name | Inhalt |

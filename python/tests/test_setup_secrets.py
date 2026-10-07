@@ -3,6 +3,7 @@ import importlib.util
 import io
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -90,6 +91,50 @@ class SecretSetupTests(unittest.TestCase):
             with self.assertRaises(ValueError) as error:
                 setup.validate_p12(Path("/outside/export.p12"), "export-secret")
             self.assertNotIn("secret", str(error.exception))
+
+    def test_macos_uses_builtin_openssl_not_homebrew(self):
+        with mock.patch.object(setup.sys, "platform", "darwin"), mock.patch.object(Path, "is_file", return_value=True), \
+             mock.patch.object(setup, "run", return_value=subprocess.CompletedProcess([], 0, b"", b"")) as run:
+            setup.validate_p12(Path("/outside/export.p12"), "export-secret")
+        self.assertEqual(run.call_args.args[0][0], "/usr/bin/openssl")
+        self.assertNotIn("-nomacver", run.call_args.args[0])
+
+    def test_openssl3_legacy_retry_only_for_unsupported_cipher_and_stdin(self):
+        results = [subprocess.CompletedProcess([], 1, b"", b"unsupported: Algorithm (RC2-40-CBC)"),
+                   subprocess.CompletedProcess([], 0, b"", b"")]
+        with mock.patch.object(setup.sys, "platform", "linux"), mock.patch.object(setup, "run", side_effect=results) as run:
+            setup.validate_p12(Path("/outside/export.p12"), "export-secret")
+        self.assertEqual(run.call_count, 2)
+        for call in run.call_args_list:
+            self.assertNotIn("export-secret", " ".join(call.args[0]))
+            self.assertNotIn("-nomacver", call.args[0])
+            self.assertEqual(call.kwargs["input"], b"export-secret\n")
+        self.assertIn("-legacy", run.call_args_list[1].args[0])
+
+    def test_wrong_password_is_not_bypassed_or_retried(self):
+        with mock.patch.object(setup, "run", return_value=subprocess.CompletedProcess([], 1, b"", b"Mac verify error: invalid password?")) as run:
+            with self.assertRaisesRegex(ValueError, "Passwortprüfung"):
+                setup.validate_p12(Path("/outside/export.p12"), "wrong-password")
+        run.assert_called_once()
+
+    @unittest.skipUnless(sys.platform == "darwin" and Path("/usr/bin/openssl").is_file(), "Needs Apple's LibreSSL")
+    def test_real_macos_legacy_p12_with_synthetic_identity(self):
+        # Generate a disposable test key, never access an actual user's P12/keychain.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            key, cert, p12 = (root / name for name in ("key.pem", "cert.pem", "test.p12"))
+            subprocess.run(["/usr/bin/openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes",
+                            "-subj", "/CN=RP Steuer Synthetic Test Only", "-days", "1",
+                            "-keyout", str(key), "-out", str(cert)], capture_output=True, check=True)
+            subprocess.run(["/usr/bin/openssl", "pkcs12", "-export", "-inkey", str(key), "-in", str(cert),
+                            "-out", str(p12), "-keypbe", "PBE-SHA1-3DES", "-certpbe", "PBE-SHA1-RC2-40",
+                            "-passout", "stdin"], input=b"synthetic-test-password\n", capture_output=True, check=True)
+            setup.validate_p12(p12, "synthetic-test-password")
+            # Also exercise the PATH/OpenSSL-3 fallback against this real legacy file.
+            with mock.patch.object(setup.sys, "platform", "linux"):
+                setup.validate_p12(p12, "synthetic-test-password")
+            with self.assertRaisesRegex(ValueError, "Passwortprüfung"):
+                setup.validate_p12(p12, "wrong-password")
 
     def test_noninteractive_setup_refuses_before_any_credentials_or_exports(self):
         with mock.patch.object(setup.sys.stdin, "isatty", return_value=False), mock.patch.object(setup, "run") as run, contextlib.redirect_stderr(io.StringIO()):

@@ -12,6 +12,10 @@ Versionsnummern folgen [Semantic Versioning](https://semver.org/lang/de/). `VERS
 - Gesonderte versionierte Wiederaufnahme-Artefakte bei noch laufender/fehlgeschlagener Notarisierung; solche ZIPs werden nicht als notarisiert veröffentlicht. Serialisierte Workflows sowie Guards für CI-Reruns und bekannte gleichversionige Pending-Artefakte verhindern blinde erneute Einreichungen.
 - Tests für Secret-Übertragung ohne Ausgabe/argv-Leaks, Validierung, sichere Eingabe und Notarisierungs-/Fehler-/Wiederaufnahmelogik.
 
+### Behoben
+- P12-Prüfung verwendet auf macOS das kompatible `/usr/bin/openssl` statt Homebrew-OpenSSL 3: ältere macOS-Schlüsselbund-Exporte mit RC2/3DES werden auch bei korrektem Passwort nicht mehr fälschlich abgewiesen. Ohne Apple-Binary wird bei nicht unterstützten Verfahren ein eng begrenzter `-legacy`-Leseversuch verwendet; Passwort-/MAC-Prüfung bleibt aktiv.
+- Regressionstests einschließlich einer synthetisch erzeugten RC2/3DES-P12 und Ablehnung falscher Passwörter; keine realen Benutzer-Schlüssel für Tests.
+
 ### Sicherheit und Status
 - Private Schlüssel, P12-Dateien und Notarisierungsdaten bleiben aus Git ausgeschlossen. Repository-Secrets müssen vom Benutzer im lokalen Terminal vervollständigt werden; der private Schlüssel wird nicht ohne Zustimmung exportiert.
 - Version **1.2.0**, Build **3**. Implementierte Notarisierungsunterstützung bedeutet noch keine Apple-Freigabe: bestehende manuelle Einreichungen von **1.1.0** sind separat und dürfen erst nach bestätigter Freigabe als notarisiert bezeichnet werden.

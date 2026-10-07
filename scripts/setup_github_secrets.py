@@ -60,10 +60,21 @@ def read_p12(path, root=ROOT):
 def validate_p12(path, password):
     if not password or "\n" in password or "\r" in password:
         raise ValueError("Die P12-Datei benötigt ein nicht leeres Export-Passwort.")
-    result = run(["openssl", "pkcs12", "-in", str(path), "-noout", "-passin", "stdin"],
-                 input=(password + "\n").encode())
+    # Keychain exports can use RC2/3DES, disabled by default in Homebrew
+    # OpenSSL 3. Apple's LibreSSL supports these without changing system policy.
+    system_openssl = Path("/usr/bin/openssl")
+    openssl = str(system_openssl) if sys.platform == "darwin" and system_openssl.is_file() else "openssl"
+    command = [openssl, "pkcs12", "-in", str(path), "-noout", "-passin", "stdin"]
+    password_input = (password + "\n").encode("utf-8")
+    result = run(command, input=password_input)
+    if result.returncode and openssl == "openssl" and b"unsupported" in result.stderr.lower():
+        # OpenSSL 3 without Apple's compatible binary: enable legacy algorithms
+        # for this one read only. MAC verification remains enabled throughout.
+        result = run(command[:2] + ["-legacy"] + command[2:], input=password_input)
     if result.returncode:
-        raise ValueError("P12 konnte nicht geöffnet werden. Datei, Export-Passwort und OpenSSL-Kompatibilität prüfen.")
+        if b"mac verify" in result.stderr.lower():
+            raise ValueError("P12-Passwortprüfung fehlgeschlagen. Export-Passwort erneut eingeben; auch eine beschädigte Datei kann diesen Fehler verursachen.")
+        raise ValueError("P12 konnte nicht geöffnet werden. Dateiformat oder OpenSSL-Kompatibilität prüfen; das Passwort muss nicht falsch sein.")
 
 
 def set_secret(repository, name, value):
